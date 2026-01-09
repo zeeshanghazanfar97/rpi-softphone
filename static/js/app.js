@@ -15,9 +15,7 @@ let state = {
     browserSpeakerDevice: null,
     audioContext: null,
     mediaStream: null,
-    audioSource: null,
-    currentBrowserMicName: null,
-    currentBrowserSpeakerName: null
+    audioSource: null
 };
 
 // DOM Elements
@@ -45,8 +43,8 @@ const elements = {
     answerIncomingBtn: document.getElementById('answerIncomingBtn'),
     rejectIncomingBtn: document.getElementById('rejectIncomingBtn'),
     messages: document.getElementById('messages'),
-    browserMicInfo: document.getElementById('browserMicInfo'),
-    browserSpeakerInfo: document.getElementById('browserSpeakerInfo'),
+    browserMicDevice: document.getElementById('browserMicDevice'),
+    browserSpeakerDevice: document.getElementById('browserSpeakerDevice'),
     refreshBrowserDevices: document.getElementById('refreshBrowserDevices'),
     testBrowserAudio: document.getElementById('testBrowserAudio')
 };
@@ -362,15 +360,18 @@ socket.on('status_update', (data) => {
     }
 });
 
-// Browser audio device functions - detect and display default devices
+// Browser audio device functions
 async function loadBrowserAudioDevices() {
     try {
         // Check if browser supports media devices API
         if (!navigator.mediaDevices) {
-            elements.browserMicInfo.textContent = 'Not supported - browser will use default';
-            elements.browserSpeakerInfo.textContent = 'Not supported - browser will use default';
-            addMessage('Browser does not support MediaDevices API. Using default devices.', 'info');
+            addMessage('Browser does not support MediaDevices API. Try using Chrome, Firefox, or Edge.', 'error');
             return;
+        }
+        
+        // Check for secure context (HTTPS or localhost)
+        if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            addMessage('Audio device access requires HTTPS or localhost. Current connection may not be secure.', 'error');
         }
         
         // Request permission to access audio devices first (required for device labels)
@@ -378,84 +379,127 @@ async function loadBrowserAudioDevices() {
         if (navigator.mediaDevices.getUserMedia) {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Get the actual device being used
-                const audioTrack = stream.getAudioTracks()[0];
-                if (audioTrack) {
-                    const settings = audioTrack.getSettings();
-                    state.browserMicDevice = settings.deviceId || 'default';
-                    state.currentBrowserMicName = audioTrack.label || 'Default Microphone';
-                    elements.browserMicInfo.textContent = state.currentBrowserMicName;
-                }
                 stream.getTracks().forEach(track => track.stop());
                 permissionGranted = true;
             } catch (e) {
                 if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-                    elements.browserMicInfo.textContent = 'Permission denied - click to grant access';
-                    addMessage('Microphone permission needed to detect device name.', 'info');
+                    addMessage('Microphone permission denied. Please allow microphone access and refresh.', 'error');
                 } else if (e.name === 'NotFoundError') {
-                    elements.browserMicInfo.textContent = 'No microphone found';
                     addMessage('No microphone found on this device.', 'error');
                 } else {
-                    elements.browserMicInfo.textContent = 'Error detecting device';
                     addMessage(`Microphone access error: ${e.message}`, 'error');
                 }
+                // Continue anyway - devices might still be enumerable without labels
             }
         }
         
-        // Try to enumerate devices to get speaker info (if supported)
-        if (navigator.mediaDevices.enumerateDevices && permissionGranted) {
+        // Enumerate audio devices
+        if (navigator.mediaDevices.enumerateDevices) {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 
-                // Find default input device (usually the first one with a label)
-                const inputDevices = devices.filter(device => device.kind === 'audioinput');
-                if (inputDevices.length > 0 && !state.currentBrowserMicName) {
-                    const defaultInput = inputDevices.find(d => d.label) || inputDevices[0];
-                    if (defaultInput && defaultInput.label) {
-                        state.currentBrowserMicName = defaultInput.label;
-                        elements.browserMicInfo.textContent = defaultInput.label;
-                    }
-                }
+                // Clear existing options
+                elements.browserMicDevice.innerHTML = '<option value="">Select browser microphone...</option>';
+                elements.browserSpeakerDevice.innerHTML = '<option value="">Select browser speaker...</option>';
                 
-                // Try to find speaker devices (audiooutput enumeration is limited)
+                // Populate microphone devices (audioinput)
+                const inputDevices = devices.filter(device => device.kind === 'audioinput');
+                inputDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    // If label is empty, device might need permission
+                    const label = device.label || (permissionGranted ? 'Unknown Microphone' : 'Microphone (grant permission to see name)');
+                    option.textContent = label;
+                    if (device.deviceId === state.browserMicDevice) {
+                        option.selected = true;
+                    }
+                    elements.browserMicDevice.appendChild(option);
+                });
+                
+                // Populate speaker devices (audiooutput)
+                // Note: audiooutput enumeration is not widely supported yet
                 const outputDevices = devices.filter(device => device.kind === 'audiooutput');
                 if (outputDevices.length > 0) {
-                    const defaultOutput = outputDevices.find(d => d.label) || outputDevices[0];
-                    if (defaultOutput && defaultOutput.label) {
-                        state.currentBrowserSpeakerName = defaultOutput.label;
-                        elements.browserSpeakerInfo.textContent = defaultOutput.label;
-                    }
+                    outputDevices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        const label = device.label || 'Unknown Speaker';
+                        option.textContent = label;
+                        if (device.deviceId === state.browserSpeakerDevice) {
+                            option.selected = true;
+                        }
+                        elements.browserSpeakerDevice.appendChild(option);
+                    });
                 } else {
-                    // Most browsers don't support audiooutput enumeration
-                    elements.browserSpeakerInfo.textContent = 'Default system speaker';
-                    state.currentBrowserSpeakerName = 'Default Speaker';
+                    // Most browsers don't support audiooutput enumeration yet
+                    // Add a default option
+                    const option = document.createElement('option');
+                    option.value = 'default';
+                    option.textContent = 'Default Speaker (browser will use system default)';
+                    elements.browserSpeakerDevice.appendChild(option);
                 }
                 
-            } catch (error) {
-                // If enumeration fails, just show default
-                if (!state.currentBrowserMicName) {
-                    elements.browserMicInfo.textContent = 'Default microphone';
+                if (inputDevices.length === 0 && outputDevices.length === 0) {
+                    addMessage('No browser audio devices found. Please check device permissions and refresh.', 'error');
+                } else {
+                    const msg = `Found ${inputDevices.length} microphone(s)${outputDevices.length > 0 ? ` and ${outputDevices.length} speaker(s)` : ' (speaker selection not fully supported in this browser)'}`;
+                    addMessage(msg, 'success');
                 }
-                elements.browserSpeakerInfo.textContent = 'Default system speaker';
+            } catch (error) {
+                addMessage(`Failed to enumerate devices: ${error.message}`, 'error');
             }
         } else {
-            // Fallback to default messages
-            if (!state.currentBrowserMicName) {
-                elements.browserMicInfo.textContent = 'Default microphone (permission needed to see name)';
-            }
-            elements.browserSpeakerInfo.textContent = 'Default system speaker';
+            addMessage('Browser does not support audio device enumeration. Try using a modern browser (Chrome, Firefox, Edge).', 'error');
         }
-        
     } catch (error) {
-        elements.browserMicInfo.textContent = 'Error detecting device';
-        elements.browserSpeakerInfo.textContent = 'Error detecting device';
-        addMessage(`Failed to detect browser audio devices: ${error.message}`, 'error');
+        addMessage(`Failed to load browser audio devices: ${error.message}`, 'error');
     }
 }
 
-// Browser devices use defaults - no selection needed
+async function selectBrowserMicDevice() {
+    const deviceId = elements.browserMicDevice.value;
+    if (!deviceId) {
+        state.browserMicDevice = null;
+        return;
+    }
+    
+    try {
+        state.browserMicDevice = deviceId;
+        addMessage('Browser microphone device selected', 'success');
+    } catch (error) {
+        addMessage(`Failed to select browser microphone: ${error.message}`, 'error');
+    }
+}
+
+async function selectBrowserSpeakerDevice() {
+    const deviceId = elements.browserSpeakerDevice.value;
+    if (!deviceId || deviceId === 'default') {
+        state.browserSpeakerDevice = null;
+        return;
+    }
+    
+    try {
+        state.browserSpeakerDevice = deviceId;
+        addMessage('Browser speaker device selected', 'success');
+        
+        // Set the audio output device if supported
+        if ('setSinkId' in HTMLAudioElement.prototype) {
+            // This will be used when we create audio elements
+            addMessage('Speaker device will be used for audio playback', 'info');
+        } else {
+            addMessage('Note: Speaker selection not fully supported in this browser. Using default speaker.', 'info');
+        }
+    } catch (error) {
+        addMessage(`Failed to select browser speaker: ${error.message}`, 'error');
+    }
+}
 
 async function testBrowserAudio() {
+    if (!state.browserMicDevice) {
+        addMessage('Please select a browser microphone first', 'error');
+        return;
+    }
+    
     try {
         addMessage('Testing browser audio...', 'info');
         
@@ -465,15 +509,14 @@ async function testBrowserAudio() {
             return;
         }
         
-        // Get user media with default device
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Get user media with selected device
+        const constraints = {
+            audio: {
+                deviceId: state.browserMicDevice ? { exact: state.browserMicDevice } : true
+            }
+        };
         
-        // Get the actual device being used for display
-        const audioTrack = stream.getAudioTracks()[0];
-        if (audioTrack) {
-            const deviceName = audioTrack.label || 'Default Microphone';
-            addMessage(`Using microphone: ${deviceName}`, 'info');
-        }
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
         // Create audio context and connect to speakers
         if (!state.audioContext) {
@@ -485,8 +528,15 @@ async function testBrowserAudio() {
         const destination = state.audioContext.createMediaStreamDestination();
         source.connect(destination);
         
-        // Play through default speaker
+        // Play through selected speaker if available
         const audio = new Audio();
+        if (state.browserSpeakerDevice && state.browserSpeakerDevice !== 'default' && 'setSinkId' in audio) {
+            try {
+                await audio.setSinkId(state.browserSpeakerDevice);
+            } catch (e) {
+                addMessage('Could not set speaker device, using default', 'info');
+            }
+        }
         audio.srcObject = destination.stream;
         await audio.play();
         
@@ -513,6 +563,8 @@ async function testBrowserAudio() {
 }
 
 // Event listeners for browser audio devices
+elements.browserMicDevice.addEventListener('change', selectBrowserMicDevice);
+elements.browserSpeakerDevice.addEventListener('change', selectBrowserSpeakerDevice);
 elements.refreshBrowserDevices.addEventListener('click', loadBrowserAudioDevices);
 elements.testBrowserAudio.addEventListener('click', testBrowserAudio);
 

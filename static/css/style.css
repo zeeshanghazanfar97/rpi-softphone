@@ -353,41 +353,6 @@ main {
     }
 }
 
-/* Device info display */
-.device-info {
-    background: #f9fafb;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-
-.info-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid #e5e7eb;
-}
-
-.info-item:last-child {
-    border-bottom: none;
-}
-
-.info-item label {
-    font-weight: 600;
-    color: #555;
-    margin: 0;
-}
-
-.device-name {
-    color: #667eea;
-    font-weight: 500;
-    font-family: 'Courier New', monospace;
-    text-align: right;
-    flex: 1;
-    margin-left: 15px;
-}
-
 /* Animation for status changes */
 @keyframes pulse {
     0%, 100% {
