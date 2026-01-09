@@ -68,11 +68,16 @@ Due to the reversed audio connections:
    - Example: `http://192.168.1.100:5000`
 
 3. **Configure devices**:
-   - **Serial Port**: Select the `/dev/ttyUSB*` device connected to your SIM808
-   - **Microphone Device**: Select the audio output device that connects to SIM808 mic in (USB sound card speaker)
-   - **Speaker Device**: Select the audio input device that receives from SIM808 speaker out (USB sound card mic)
+   - **Serial Port**: Select the `/dev/ttyUSB*` device connected to your SIM808 (default baudrate: 115200)
+   - **Raspberry Pi Audio Devices**:
+     - **Microphone Device**: Select the audio output device that connects to SIM808 mic in (USB sound card speaker)
+     - **Speaker Device**: Select the audio input device that receives from SIM808 speaker out (USB sound card mic)
+   - **Browser Audio Devices** (on your local device):
+     - **Browser Microphone**: Select the microphone on the device where you opened the web app
+     - **Browser Speaker**: Select the speaker on the device where you opened the web app
    - Click "Connect" to establish serial connection
-   - Click "Save Audio Devices" to save your audio device selections
+   - Click "Save Audio Devices" to save your Raspberry Pi audio device selections
+   - Browser audio devices are selected automatically when you choose them from the dropdown
 
 4. **Make a call**:
    - Enter a phone number in the "Phone Number" field
@@ -162,7 +167,7 @@ The application uses WebSocket (Socket.IO) for real-time status updates:
 
 ### Connection Issues
 - Verify SIM808 is powered on
-- Check AT command response: `minicom -D /dev/ttyUSB0 -b 9600`
+- Check AT command response: `minicom -D /dev/ttyUSB0 -b 115200`
 - Test with: `echo "AT" > /dev/ttyUSB0` and check response
 
 ### SIM Card Issues

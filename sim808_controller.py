@@ -13,13 +13,13 @@ logger = logging.getLogger(__name__)
 class SIM808Controller:
     """Controller for SIM808 module communication"""
     
-    def __init__(self, port=None, baudrate=9600, timeout=1):
+    def __init__(self, port=None, baudrate=115200, timeout=1):
         """
         Initialize SIM808 controller
         
         Args:
             port (str): Serial port path (e.g., '/dev/ttyUSB0')
-            baudrate (int): Serial baud rate (default 9600)
+            baudrate (int): Serial baud rate (default 115200)
             timeout (float): Serial timeout in seconds
         """
         self.port = port

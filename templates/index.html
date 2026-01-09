@@ -51,6 +51,31 @@
                 <button id="saveAudioDevices" class="btn btn-primary">Save Audio Devices</button>
             </section>
 
+            <!-- Browser Audio Device Selection Section -->
+            <section class="card">
+                <h2>Browser Audio Devices</h2>
+                <p class="help-text" style="margin-bottom: 15px;">Select audio devices on your local device (where this web app is opened)</p>
+                
+                <div class="form-group">
+                    <label for="browserMicDevice">Browser Microphone:</label>
+                    <select id="browserMicDevice">
+                        <option value="">Select browser microphone...</option>
+                    </select>
+                    <button id="refreshBrowserDevices" class="btn btn-secondary">Refresh</button>
+                    <small class="help-text">Microphone on your local device (captures your voice)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="browserSpeakerDevice">Browser Speaker:</label>
+                    <select id="browserSpeakerDevice">
+                        <option value="">Select browser speaker...</option>
+                    </select>
+                    <small class="help-text">Speaker on your local device (plays audio from call)</small>
+                </div>
+
+                <button id="testBrowserAudio" class="btn btn-secondary">Test Audio</button>
+            </section>
+
             <!-- Call Control Section -->
             <section class="card">
                 <h2>Call Control</h2>

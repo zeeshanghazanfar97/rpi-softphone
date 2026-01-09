@@ -74,7 +74,7 @@ def connect_serial():
     try:
         data = request.get_json()
         port = data.get('port')
-        baudrate = data.get('baudrate', 9600)
+        baudrate = data.get('baudrate', 115200)
         
         if not port:
             return jsonify({'success': False, 'error': 'Port not specified'}), 400

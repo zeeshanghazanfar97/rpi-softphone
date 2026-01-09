@@ -10,7 +10,12 @@ let state = {
     incomingCallNumber: null,
     selectedSerialPort: null,
     selectedMicDevice: null,
-    selectedSpeakerDevice: null
+    selectedSpeakerDevice: null,
+    browserMicDevice: null,
+    browserSpeakerDevice: null,
+    audioContext: null,
+    mediaStream: null,
+    audioSource: null
 };
 
 // DOM Elements
@@ -37,7 +42,11 @@ const elements = {
     incomingCallNumber: document.getElementById('incomingCallNumber'),
     answerIncomingBtn: document.getElementById('answerIncomingBtn'),
     rejectIncomingBtn: document.getElementById('rejectIncomingBtn'),
-    messages: document.getElementById('messages')
+    messages: document.getElementById('messages'),
+    browserMicDevice: document.getElementById('browserMicDevice'),
+    browserSpeakerDevice: document.getElementById('browserSpeakerDevice'),
+    refreshBrowserDevices: document.getElementById('refreshBrowserDevices'),
+    testBrowserAudio: document.getElementById('testBrowserAudio')
 };
 
 // Utility functions
@@ -351,11 +360,164 @@ socket.on('status_update', (data) => {
     }
 });
 
+// Browser audio device functions
+async function loadBrowserAudioDevices() {
+    try {
+        // Request permission to access audio devices
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Try to get a stream to enumerate devices (some browsers require this)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                addMessage('Microphone access denied. Please grant permission.', 'error');
+            }
+        }
+        
+        // Enumerate audio input devices
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            // Clear existing options
+            elements.browserMicDevice.innerHTML = '<option value="">Select browser microphone...</option>';
+            elements.browserSpeakerDevice.innerHTML = '<option value="">Select browser speaker...</option>';
+            
+            // Populate microphone devices (audioinput)
+            const inputDevices = devices.filter(device => device.kind === 'audioinput');
+            inputDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.textContent = device.label || `Microphone ${device.deviceId.substring(0, 8)}`;
+                if (device.deviceId === state.browserMicDevice) {
+                    option.selected = true;
+                }
+                elements.browserMicDevice.appendChild(option);
+            });
+            
+            // Populate speaker devices (audiooutput)
+            const outputDevices = devices.filter(device => device.kind === 'audiooutput');
+            outputDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.textContent = device.label || `Speaker ${device.deviceId.substring(0, 8)}`;
+                if (device.deviceId === state.browserSpeakerDevice) {
+                    option.selected = true;
+                }
+                elements.browserSpeakerDevice.appendChild(option);
+            });
+            
+            if (inputDevices.length === 0 && outputDevices.length === 0) {
+                addMessage('No browser audio devices found. Please check permissions.', 'error');
+            } else {
+                addMessage(`Found ${inputDevices.length} microphone(s) and ${outputDevices.length} speaker(s)`, 'success');
+            }
+        } else {
+            addMessage('Browser does not support audio device enumeration', 'error');
+        }
+    } catch (error) {
+        addMessage(`Failed to load browser audio devices: ${error.message}`, 'error');
+    }
+}
+
+async function selectBrowserMicDevice() {
+    const deviceId = elements.browserMicDevice.value;
+    if (!deviceId) {
+        state.browserMicDevice = null;
+        return;
+    }
+    
+    try {
+        state.browserMicDevice = deviceId;
+        addMessage('Browser microphone device selected', 'success');
+    } catch (error) {
+        addMessage(`Failed to select browser microphone: ${error.message}`, 'error');
+    }
+}
+
+async function selectBrowserSpeakerDevice() {
+    const deviceId = elements.browserSpeakerDevice.value;
+    if (!deviceId) {
+        state.browserSpeakerDevice = null;
+        return;
+    }
+    
+    try {
+        state.browserSpeakerDevice = deviceId;
+        addMessage('Browser speaker device selected', 'success');
+        
+        // Set the audio output device if supported
+        if (navigator.mediaDevices && 'setSinkId' in HTMLAudioElement.prototype) {
+            // This will be used when we create audio elements
+            addMessage('Speaker device will be used for audio playback', 'info');
+        }
+    } catch (error) {
+        addMessage(`Failed to select browser speaker: ${error.message}`, 'error');
+    }
+}
+
+async function testBrowserAudio() {
+    if (!state.browserMicDevice) {
+        addMessage('Please select a browser microphone first', 'error');
+        return;
+    }
+    
+    try {
+        addMessage('Testing browser audio...', 'info');
+        
+        // Get user media with selected device
+        const constraints = {
+            audio: {
+                deviceId: { exact: state.browserMicDevice }
+            }
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // Create audio context and connect to speakers
+        if (!state.audioContext) {
+            state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Create a simple feedback loop for testing
+        const source = state.audioContext.createMediaStreamSource(stream);
+        const destination = state.audioContext.createMediaStreamDestination();
+        source.connect(destination);
+        
+        // Play through selected speaker if available
+        const audio = new Audio();
+        if (state.browserSpeakerDevice && 'setSinkId' in audio) {
+            await audio.setSinkId(state.browserSpeakerDevice);
+        }
+        audio.srcObject = destination.stream;
+        audio.play();
+        
+        addMessage('Audio test started. You should hear your microphone. Stop test after a few seconds.', 'success');
+        
+        // Stop after 5 seconds
+        setTimeout(() => {
+            stream.getTracks().forEach(track => track.stop());
+            audio.pause();
+            audio.srcObject = null;
+            addMessage('Audio test stopped', 'info');
+        }, 5000);
+        
+    } catch (error) {
+        addMessage(`Audio test failed: ${error.message}`, 'error');
+    }
+}
+
+// Event listeners for browser audio devices
+elements.browserMicDevice.addEventListener('change', selectBrowserMicDevice);
+elements.browserSpeakerDevice.addEventListener('change', selectBrowserSpeakerDevice);
+elements.refreshBrowserDevices.addEventListener('click', loadBrowserAudioDevices);
+elements.testBrowserAudio.addEventListener('click', testBrowserAudio);
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     addMessage('SIM808 Softphone initialized', 'info');
     loadSerialDevices();
     loadAudioDevices();
+    loadBrowserAudioDevices();
     refreshStatus();
     
     // Refresh status periodically
