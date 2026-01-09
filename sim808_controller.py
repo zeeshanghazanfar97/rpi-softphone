@@ -55,23 +55,44 @@ class SIM808Controller:
                 self.port,
                 self.baudrate,
                 timeout=self.timeout,
-                write_timeout=self.timeout
+                write_timeout=self.timeout,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                rtscts=False,
+                dsrdtr=False
             )
-            time.sleep(0.1)  # Give serial port time to initialize
             
-            # Test connection with AT command
-            if self.send_command("AT", expected="OK"):
+            # Set DTR and RTS to ensure proper initialization
+            self.serial_conn.dtr = True
+            self.serial_conn.rts = True
+            time.sleep(0.2)  # Give serial port time to initialize
+            
+            # Clear any existing data in buffers
+            self.serial_conn.reset_input_buffer()
+            self.serial_conn.reset_output_buffer()
+            time.sleep(0.1)
+            
+            # Test connection with AT command (bypass is_connected check)
+            logger.info(f"Testing connection with AT command on {self.port}...")
+            response = self._send_command_raw("AT", expected="OK", timeout=3)
+            if response:
                 self.is_connected = True
                 # Enable caller ID presentation
-                self.send_command("AT+CLIP=1")
+                self._send_command_raw("AT+CLIP=1")
                 # Start monitoring thread
                 self.start_monitoring()
                 logger.info(f"Connected to SIM808 on {self.port}")
                 return True
             else:
+                # Try reading any available data to see what we got
+                if self.serial_conn.in_waiting > 0:
+                    raw_data = self.serial_conn.read(self.serial_conn.in_waiting)
+                    logger.error(f"SIM808 did not respond correctly. Raw data received: {raw_data}")
+                else:
+                    logger.error("SIM808 did not respond to AT command (no data received)")
                 self.serial_conn.close()
                 self.serial_conn = None
-                logger.error("SIM808 did not respond to AT command")
                 return False
                 
         except serial.SerialException as e:
@@ -88,6 +109,69 @@ class SIM808Controller:
         self.is_connected = False
         logger.info("Disconnected from SIM808")
     
+    def _send_command_raw(self, command, expected=None, timeout=None):
+        """
+        Internal method to send AT command without checking is_connected
+        Used during initial connection
+        
+        Args:
+            command (str): AT command to send (without \r\n)
+            expected (str): Expected response substring (optional)
+            timeout (float): Override default timeout
+            
+        Returns:
+            str: Response string or None if failed
+        """
+        if not self.serial_conn or not self.serial_conn.is_open:
+            logger.error("Serial port not open")
+            return None
+            
+        try:
+            # Clear input buffer
+            self.serial_conn.reset_input_buffer()
+            time.sleep(0.05)
+            
+            # Send command
+            cmd_bytes = f"{command}\r\n".encode('utf-8')
+            self.serial_conn.write(cmd_bytes)
+            self.serial_conn.flush()  # Ensure data is sent
+            logger.debug(f"Sent: {command}")
+            
+            # Read response
+            read_timeout = timeout if timeout else self.timeout
+            response = b""
+            start_time = time.time()
+            last_read_time = start_time
+            
+            while time.time() - start_time < read_timeout:
+                if self.serial_conn.in_waiting > 0:
+                    data = self.serial_conn.read(self.serial_conn.in_waiting)
+                    response += data
+                    last_read_time = time.time()
+                    # Check if we have a complete response
+                    if b"OK" in response or b"ERROR" in response:
+                        break
+                elif response and (time.time() - last_read_time) > 0.1:
+                    # No new data for 100ms, assume response is complete
+                    break
+                time.sleep(0.01)
+            
+            response_str = response.decode('utf-8', errors='ignore').strip()
+            logger.info(f"Received response: {repr(response_str)}")
+            
+            if expected:
+                if expected in response_str:
+                    return response_str
+                else:
+                    logger.warning(f"Expected '{expected}' but got: {repr(response_str)}")
+                    return None
+            
+            return response_str if response_str else None
+            
+        except Exception as e:
+            logger.error(f"Error sending command '{command}': {e}")
+            return None
+    
     def send_command(self, command, expected=None, timeout=None):
         """
         Send AT command and wait for response
@@ -103,44 +187,8 @@ class SIM808Controller:
         if not self.is_connected or not self.serial_conn:
             logger.error("Not connected to SIM808")
             return None
-            
-        try:
-            # Clear input buffer
-            self.serial_conn.reset_input_buffer()
-            
-            # Send command
-            cmd_bytes = f"{command}\r\n".encode()
-            self.serial_conn.write(cmd_bytes)
-            logger.debug(f"Sent: {command}")
-            
-            # Read response
-            read_timeout = timeout if timeout else self.timeout
-            response = b""
-            start_time = time.time()
-            
-            while time.time() - start_time < read_timeout:
-                if self.serial_conn.in_waiting > 0:
-                    response += self.serial_conn.read(self.serial_conn.in_waiting)
-                    # Check if we have a complete response
-                    if b"OK" in response or b"ERROR" in response:
-                        break
-                time.sleep(0.01)
-            
-            response_str = response.decode('utf-8', errors='ignore').strip()
-            logger.debug(f"Received: {response_str}")
-            
-            if expected:
-                if expected in response_str:
-                    return response_str
-                else:
-                    logger.warning(f"Expected '{expected}' but got: {response_str}")
-                    return None
-            
-            return response_str
-            
-        except Exception as e:
-            logger.error(f"Error sending command '{command}': {e}")
-            return None
+        
+        return self._send_command_raw(command, expected, timeout)
     
     def dial(self, number):
         """

@@ -185,7 +185,7 @@ async function connectSerial() {
     
     try {
         addMessage(`Connecting to ${port}...`, 'info');
-        const result = await apiCall('connect', 'POST', { port: port, baudrate: 9600 });
+        const result = await apiCall('connect', 'POST', { port: port, baudrate: 115200 });
         state.selectedSerialPort = port;
         addMessage(result.message, 'success');
         await refreshStatus();
