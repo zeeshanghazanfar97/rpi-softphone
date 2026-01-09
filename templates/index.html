@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIM808 Softphone</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SIM808 Softphone</h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Device Selection Section -->
+            <section class="card">
+                <h2>Device Selection</h2>
+                
+                <div class="form-group">
+                    <label for="serialPort">Serial Port:</label>
+                    <select id="serialPort">
+                        <option value="">Select serial port...</option>
+                    </select>
+                    <button id="refreshSerial" class="btn btn-secondary">Refresh</button>
+                    <button id="connectBtn" class="btn btn-primary">Connect</button>
+                    <button id="disconnectBtn" class="btn btn-danger" disabled>Disconnect</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="micDevice">Microphone (to SIM808):</label>
+                    <select id="micDevice">
+                        <option value="">Select microphone device...</option>
+                    </select>
+                    <small class="help-text">Audio sent to SIM808 mic input (USB sound card speaker out)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="speakerDevice">Speaker (from SIM808):</label>
+                    <select id="speakerDevice">
+                        <option value="">Select speaker device...</option>
+                    </select>
+                    <small class="help-text">Audio received from SIM808 speaker output (USB sound card mic in)</small>
+                </div>
+
+                <button id="saveAudioDevices" class="btn btn-primary">Save Audio Devices</button>
+            </section>
+
+            <!-- Call Control Section -->
+            <section class="card">
+                <h2>Call Control</h2>
+                
+                <div class="call-status" id="callStatus">
+                    <div class="status-display">
+                        <span id="callStatusText">No active call</span>
+                        <span id="callNumber" class="call-number"></span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="phoneNumber">Phone Number:</label>
+                    <input type="text" id="phoneNumber" placeholder="Enter phone number" maxlength="20">
+                </div>
+
+                <div class="button-group">
+                    <button id="dialBtn" class="btn btn-primary" disabled>Dial</button>
+                    <button id="answerBtn" class="btn btn-success" disabled>Answer</button>
+                    <button id="hangupBtn" class="btn btn-danger" disabled>Hang Up</button>
+                </div>
+            </section>
+
+            <!-- DTMF Keypad Section -->
+            <section class="card">
+                <h2>DTMF Keypad</h2>
+                <div class="dtmf-keypad" id="dtmfKeypad">
+                    <button class="dtmf-key" data-digit="1">1</button>
+                    <button class="dtmf-key" data-digit="2">2</button>
+                    <button class="dtmf-key" data-digit="3">3</button>
+                    <button class="dtmf-key" data-digit="4">4</button>
+                    <button class="dtmf-key" data-digit="5">5</button>
+                    <button class="dtmf-key" data-digit="6">6</button>
+                    <button class="dtmf-key" data-digit="7">7</button>
+                    <button class="dtmf-key" data-digit="8">8</button>
+                    <button class="dtmf-key" data-digit="9">9</button>
+                    <button class="dtmf-key" data-digit="*">*</button>
+                    <button class="dtmf-key" data-digit="0">0</button>
+                    <button class="dtmf-key" data-digit="#">#</button>
+                </div>
+            </section>
+
+            <!-- Incoming Call Notification -->
+            <div class="notification" id="incomingCallNotification" style="display: none;">
+                <div class="notification-content">
+                    <h3>Incoming Call</h3>
+                    <p id="incomingCallNumber">Unknown number</p>
+                    <div class="notification-buttons">
+                        <button id="answerIncomingBtn" class="btn btn-success">Answer</button>
+                        <button id="rejectIncomingBtn" class="btn btn-danger">Reject</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages/Log Section -->
+            <section class="card">
+                <h2>Messages</h2>
+                <div class="messages" id="messages"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
